@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections import namedtuple, OrderedDict
+from weakref import WeakValueDictionary
 from aiogear.packet import Type
 from aiogear.mixin import GearmanProtocolMixin
 from aiogear.response import NoJob
@@ -18,6 +19,7 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         self.interval = interval
         self.tasks = []
         self.functions = OrderedDict()
+        self.running = WeakValueDictionary()
         self.task_no = 1
         self.waiters = []
         for func_arg in functions:
@@ -29,6 +31,7 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
                 self.functions[name] = func_arg
 
     def connection_made(self, transport):
+        logger.info('Connection is made to %r', transport.get_extra_info('peername'))
         self.transport = transport
 
         for fname in self.functions.keys():
@@ -50,23 +53,41 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
                 func = self.functions.get(job_info.function)
                 if not func:
                     logger.warning(
-                        'Failed to find function %r in %r', job_info.function,
-                        self.functions.keys())
+                        'Failed to find function %s in %s', job_info.function,
+                        ', '.join(self.functions.keys()))
                     self.work_fail(job_info.handle)
                     continue
 
                 try:
                     result_or_coro = func(job_info)
                     if asyncio.iscoroutine(result_or_coro):
-                        result = await result_or_coro
+                        task = asyncio.ensure_future(result_or_coro, loop=self.loop)
+                        self.running[job_info.handle] = task
+                        result = await task
                     else:
                         result = result_or_coro
                     self.work_complete(job_info.handle, result)
                 except Exception as ex:
+                    logger.warning('Job resulted with exception %r', ex)
                     self.work_exception(job_info.handle, str(ex))
 
             except AttributeError:
                 logger.error('Unexpected GRAB_JOB response %r', response)
+
+    async def shutdown(self):
+        logger.debug('Shutting down worker ...')
+        async def cancel_and_wait(tasks):
+            if not tasks:
+                return
+            for task in tasks:
+                task.cancel()
+            try:
+                await asyncio.wait(tasks, loop=self.loop)
+            except asyncio.CancelledError:
+                pass
+
+        await cancel_and_wait(list(self.running.values()))
+        await cancel_and_wait(self.tasks)
 
     def _to_job_info(self, job_assign):
         attrs = ['handle', 'function', 'uuid', 'reducer', 'workload']
