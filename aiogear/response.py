@@ -7,5 +7,6 @@ JobAssignUniq = namedtuple('JobAssignUniq', ['handle', 'function', 'uuid', 'work
 JobAssignAll = namedtuple('JobAssignAll', ['handle', 'function', 'uuid', 'reducer', 'workload'])
 WorkComplete = namedtuple('WorkComplete', ['handle', 'result'])
 WorkFail = namedtuple('WorkFail', ['handle'])
+WorkException = namedtuple('WorkException', ['handle', 'exception'])
 NoJob = namedtuple('NoJob', [])
 Noop = namedtuple('Noop', [])

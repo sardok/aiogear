@@ -4,13 +4,14 @@ import logging
 from functools import partial
 from aiogear.packet import Type
 from aiogear.utils import to_bool
-from aiogear.response import Noop, NoJob, WorkComplete, WorkFail, JobCreated
+from aiogear.response import Noop, NoJob, JobCreated
+from aiogear.response import WorkComplete, WorkFail, WorkException
 from aiogear.response import JobAssign, JobAssignUniq, JobAssignAll
 
 logger = logging.getLogger(__file__)
 
 
-class GearmanProtocolMixin(object):
+class GearmanProtocolMixin:
     _REQ_MAGIC = b'\0REQ'
     _RES_MAGIC = b'\0RES'
     _delimiter = b'\0'
@@ -30,6 +31,8 @@ class GearmanProtocolMixin(object):
             Type.STATUS_RES_UNIQUE: self._status_res_handler,
             Type.WORK_COMPLETE: lambda x: WorkComplete(*[a.decode('utf8') for a in self._split(x)]),
             Type.WORK_FAIL: lambda x: WorkFail(self._split(x)[0].decode('utf8')),
+            Type.WORK_EXCEPTION: lambda x: WorkException(
+                *[a.decode('utf8') for a in self._split(x)]),
             Type.ERROR: self._error_handler,
             Type.NO_JOB: lambda _: NoJob(),
             Type.NOOP: lambda _: Noop(),
