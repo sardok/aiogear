@@ -17,10 +17,9 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         super(Worker, self).__init__(loop=loop)
         self.transport = None
         self.interval = interval
-        self.tasks = []
+        self.task = None
         self.functions = OrderedDict()
         self.running = WeakValueDictionary()
-        self.task_no = 1
         self.waiters = []
         for func_arg in functions:
             try:
@@ -37,13 +36,13 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         for fname in self.functions.keys():
             logger.debug('Registering function %s', fname)
             self.can_do(fname)
-        self.tasks = [asyncio.Task(self.run()) for _ in range(self.task_no)]
+        self.task = asyncio.Task(self.run())
 
-    async def run(self):
+    async def run(self,):
         no_job = NoJob()
         while True:
             self.pre_sleep()
-            await self.register_response(Type.NOOP)
+            await self.wait_for(Type.NOOP)
             response = await self.grab_job()
             if response == no_job:
                 continue
@@ -87,7 +86,7 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
                 pass
 
         await cancel_and_wait(list(self.running.values()))
-        await cancel_and_wait(self.tasks)
+        await cancel_and_wait([self.task])
 
     def _to_job_info(self, job_assign):
         attrs = ['handle', 'function', 'uuid', 'reducer', 'workload']
@@ -106,15 +105,15 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
 
     def grab_job_all(self):
         self.send(Type.GRAB_JOB_ALL)
-        return self.register_response(Type.NO_JOB, Type.JOB_ASSIGN_ALL)
+        return self.wait_for(Type.NO_JOB, Type.JOB_ASSIGN_ALL)
 
     def grab_job_uniq(self):
         self.send(Type.GRAB_JOB_UNIQ)
-        return self.register_response(Type.NO_JOB, Type.JOB_ASSIGN_UNIQ)
+        return self.wait_for(Type.NO_JOB, Type.JOB_ASSIGN_UNIQ)
 
     def grab_job(self):
         self.send(Type.GRAB_JOB)
-        return self.register_response(Type.NO_JOB, Type.JOB_ASSIGN)
+        return self.wait_for(Type.NO_JOB, Type.JOB_ASSIGN)
 
     def pre_sleep(self):
         self.send(Type.PRE_SLEEP)

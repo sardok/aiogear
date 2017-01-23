@@ -38,8 +38,8 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
         if uuid is None:
             uuid = self.uuid()
         self.send(packet, name, uuid, *args)
-        handle = await self.register_response(Type.JOB_CREATED)
-        f = self.register_response(Type.WORK_COMPLETE)
+        handle = await self.wait_for(Type.JOB_CREATED)
+        f = self.wait_for(Type.WORK_COMPLETE)
         self.handles[handle] = f
         f.add_done_callback(lambda _: self.handles.pop(handle))
         return handle
@@ -50,15 +50,15 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
 
     def get_status(self, handle):
         self.send(Type.GET_STATUS, handle)
-        return self.register_response(Type.STATUS_RES)
+        return self.wait_for(Type.STATUS_RES)
 
     def get_status_unique(self, uuid):
         self.send(Type.STATUS_RES_UNIQUE, uuid)
-        return self.register_response(Type.STATUS_RES_UNIQUE)
+        return self.wait_for(Type.STATUS_RES_UNIQUE)
 
     def option_req(self, option):
         self.send(Type.OPTION_REQ, option)
-        return self.register_response(Type.OPTION_RES, Type.ERROR)
+        return self.wait_for(Type.OPTION_RES, Type.ERROR)
 
     def wait_job(self, handle):
         f = self.handles.get(handle)

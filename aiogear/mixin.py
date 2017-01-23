@@ -15,6 +15,7 @@ class GearmanProtocolMixin:
     _REQ_MAGIC = b'\0REQ'
     _RES_MAGIC = b'\0RES'
     _delimiter = b'\0'
+    _data = b''
 
     def __init__(self, loop=None):
         super(GearmanProtocolMixin, self).__init__()
@@ -45,15 +46,15 @@ class GearmanProtocolMixin:
     def serializer(self, packet):
         return self._serializers.get(packet, self._join)
 
-    def parse(self, data):
+    def _unpack(self, data):
         fmt = '>4sII'
         fmt_sz = struct.calcsize(fmt)
-        magic, packet_num, size = struct.unpack(fmt, data[:fmt_sz])
+        magic, packet_num, sz = struct.unpack(fmt, data[:fmt_sz])
         packet = Type(packet_num)
-        handler = self._deserializers.get(packet, lambda x: x)
-        return Type(packet), handler(data[fmt_sz:])
+        begin, end = fmt_sz, fmt_sz + sz
+        return Type(packet), data[begin:end], end
 
-    def _pack(self, magic, packet, payload=''):
+    def _pack(self, magic, packet, payload=b''):
         assert isinstance(packet, Type)
         length = len(payload)
         packed = struct.pack('>4sII', magic, packet.value, length)
@@ -80,12 +81,12 @@ class GearmanProtocolMixin:
         args = [a.encode('ascii') if isinstance(a, str) else a for a in args]
         return delimiter.join(args)
 
-    def register(self, callback, *packets):
+    def do_register(self, callback, *packets):
         key = packets
         entry = (key, callback)
         self._registers.append(entry)
 
-    def register_response(self, *packets, return_response=False):
+    def wait_for(self, *packets, return_response=False):
         f = self.loop.create_future()
 
         def cb(*data):
@@ -94,14 +95,14 @@ class GearmanProtocolMixin:
                 f.set_result((packet_type, response))
             else:
                 f.set_result(response)
-        self.register(cb, *packets)
+        self.do_register(cb, *packets)
         return f
 
     def get_registered(self, packet):
         index = None
-        for index, (key, _) in enumerate(self._registers):
+        for i, (key, _) in enumerate(self._registers):
             if packet in key:
-                index = index
+                index = i
                 break
         if index is not None:
             _, cb = self._registers.pop(index)
@@ -121,12 +122,21 @@ class GearmanProtocolMixin:
         return self._cast_args(args, casters)
 
     def data_received(self, data):
-        packet, *args = self.parse(data)
-        cb = self.get_registered(packet)
-        if cb:
-            cb(packet, *args)
-        else:
-            logger.warning('Received un-expected message from server: %s (%r)', packet, args)
+        self._data += data
+        while self._data:
+            try:
+                packet, payload, offset = self._unpack(self._data)
+            except struct.error:
+                # not enough data in the buffer
+                break
+            handler = self._deserializers.get(packet, lambda x: x)
+            args = handler(payload)
+            cb = self.get_registered(packet)
+            if cb:
+                cb(packet, args)
+            else:
+                logger.warning('Received un-expected message from server: %s (%r)', packet, args)
+            self._data = self._data[offset:]
 
     def _send(self, data):
         if self.transport:
