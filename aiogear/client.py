@@ -38,11 +38,12 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
         if uuid is None:
             uuid = self.uuid()
         self.send(packet, name, uuid, *args)
-        handle = await self.wait_for(Type.JOB_CREATED)
-        f = self.wait_for(Type.WORK_COMPLETE)
+        job_created = await self.wait_for(Type.JOB_CREATED)
+        f = self.wait_for(Type.WORK_COMPLETE, Type.WORK_FAIL, Type.WORK_EXCEPTION)
+        handle = job_created.handle
         self.handles[handle] = f
         f.add_done_callback(lambda _: self.handles.pop(handle))
-        return handle
+        return job_created
 
     def submit_job_sched(self, name, dt, *args, **kwargs):
         sched_args = [str(int(x)) for x in dt.strftime('%M %H %d %m %w').split()]
@@ -63,5 +64,5 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
     def wait_job(self, handle):
         f = self.handles.get(handle)
         if not f:
-            raise RuntimeError('Unable to find handle {}'.format(handle))
+            raise RuntimeError('Unable to find handle {} in handles {}'.format(handle, self.handles))
         return f
