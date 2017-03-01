@@ -33,6 +33,9 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
 
+    def connection_lost(self, exc):
+        self.transport = None
+
     async def _submit_job(self, packet, name, *args, **kwargs):
         uuid = kwargs.pop('uuid', None)
         if uuid is None:
@@ -66,3 +69,9 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
         if not f:
             raise RuntimeError('Unable to find handle {} in handles {}'.format(handle, self.handles))
         return f
+
+    def set_client_id(self, client_id):
+        self.send(Type.SET_CLIENT_ID, client_id)
+
+    def disconnect(self):
+        self.transport.close()
