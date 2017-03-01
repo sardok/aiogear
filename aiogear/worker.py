@@ -13,14 +13,26 @@ JobInfo = namedtuple('JobInfo', ['handle', 'function', 'uuid', 'reducer', 'workl
 
 
 class Worker(GearmanProtocolMixin, asyncio.Protocol):
-    def __init__(self, *functions, loop=None, interval=1):
+    def __init__(self, *functions, loop=None, grab_type=Type.GRAB_JOB):
         super(Worker, self).__init__(loop=loop)
         self.transport = None
-        self.interval = interval
         self.task = None
         self.functions = OrderedDict()
         self.running = WeakValueDictionary()
         self.waiters = []
+
+        grab_mapping = {
+            Type.GRAB_JOB: self.grab_job,
+            Type.GRAB_JOB_UNIQ: self.grab_job_uniq,
+            Type.GRAB_JOB_ALL: self.grab_job_all,
+        }
+
+        try:
+            self.grab = grab_mapping[grab_type]
+        except KeyError:
+            raise RuntimeError(
+                'Grab type must be one of GRAB_JOB, GRAB_JOB_UNIQ or GRAB_JOB_ALL')
+
         for func_arg in functions:
             try:
                 func, name = func_arg
@@ -36,14 +48,20 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         for fname in self.functions.keys():
             logger.debug('Registering function %s', fname)
             self.can_do(fname)
-        self.task = asyncio.Task(self.run())
+        self.task = self.get_task()
+
+    def connection_lost(self, exc):
+        self.transport = None
+
+    def get_task(self):
+        return asyncio.Task(self.run())
 
     async def run(self,):
         no_job = NoJob()
         while True:
             self.pre_sleep()
             await self.wait_for(Type.NOOP)
-            response = await self.grab_job()
+            response = await self.grab()
             if response == no_job:
                 continue
 
@@ -87,14 +105,14 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
 
         await cancel_and_wait(list(self.running.values()))
         await cancel_and_wait([self.task])
+        if self.transport:
+            self.transport.close()
 
-    def _to_job_info(self, job_assign):
+    @staticmethod
+    def _to_job_info(job_assign):
         attrs = ['handle', 'function', 'uuid', 'reducer', 'workload']
         values = [getattr(job_assign, attr, None) for attr in attrs]
         return JobInfo(*values)
-
-    def _grab_any_job(self):
-        return self.grab_job()
 
     def register_function(self, func, name=''):
         if not self.transport:
@@ -131,6 +149,3 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         if result is None:
             result = ''
         self.send(Type.WORK_COMPLETE, handle, result)
-
-    def set_client_id(self, cid):
-        self.send(Type.SET_CLIENT_ID, cid)
