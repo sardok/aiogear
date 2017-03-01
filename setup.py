@@ -5,6 +5,7 @@ setup(
     version='0.1',
     author='Sinan Nalkaya',
     author_email='sardok@gmail.com',
+    url='https://github.com/sardok/aiogear',
     description='Asynchronous gearman protocol based on asyncio',
     packages=['aiogear'],
     classifiers=[
