@@ -3,6 +3,8 @@ from distutils.core import setup
 setup(
     name='aiogear',
     version='0.1',
+    author='Sinan Nalkaya',
+    author_email='sardok@gmail.com',
     description='Asynchronous gearman protocol based on asyncio',
     packages=['aiogear'],
     classifiers=[
