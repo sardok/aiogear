@@ -20,14 +20,16 @@ class GearmanProtocolMixin:
     def __init__(self, loop=None):
         super(GearmanProtocolMixin, self).__init__()
         self.loop = loop or asyncio.get_event_loop()
-        self._serializers = {}
+        self._serializers = {
+            Type.CAN_DO_TIMEOUT: lambda *xs: self._join(*[str(x) for x in xs])
+        }
         self._deserializers = {
             Type.JOB_ASSIGN: lambda x: JobAssign(
                 *[a.decode('utf8') for a in self._split(x, maxsplit=2)]),
             Type.JOB_ASSIGN_UNIQ: lambda x: JobAssignUniq(
                 *[a.decode('utf8') for a in self._split(x, maxsplit=3)]),
             Type.JOB_ASSIGN_ALL: lambda x: JobAssignAll(
-                *[a.decode('utf8') for a in self._split(x, maxsplit=3)]),
+                *[a.decode('utf8') for a in self._split(x, maxsplit=4)]),
             Type.STATUS_RES: self._status_res_handler,
             Type.STATUS_RES_UNIQUE: self._status_res_handler,
             Type.WORK_COMPLETE: lambda x: WorkComplete(*[a.decode('utf8') for a in self._split(x)]),
@@ -50,9 +52,8 @@ class GearmanProtocolMixin:
         fmt = '>4sII'
         fmt_sz = struct.calcsize(fmt)
         magic, packet_num, sz = struct.unpack(fmt, data[:fmt_sz])
-        packet = Type(packet_num)
         begin, end = fmt_sz, fmt_sz + sz
-        return Type(packet), data[begin:end], end
+        return Type(packet_num), data[begin:end], end
 
     def _pack(self, magic, packet, payload=b''):
         assert isinstance(packet, Type)
