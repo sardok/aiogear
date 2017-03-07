@@ -85,7 +85,7 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
                         result = result_or_coro
                     self.work_complete(job_info.handle, result)
                 except Exception as ex:
-                    logger.warning('Job resulted with exception %r', ex)
+                    logger.exception('Job (handle %s) resulted with exception', job_info.handle)
                     self.work_exception(job_info.handle, str(ex))
 
             except AttributeError:
