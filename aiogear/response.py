@@ -10,3 +10,6 @@ WorkFail = namedtuple('WorkFail', ['handle'])
 WorkException = namedtuple('WorkException', ['handle', 'exception'])
 NoJob = namedtuple('NoJob', [])
 Noop = namedtuple('Noop', [])
+StatusRes = namedtuple('StatusRes', ['handle', 'known', 'running', 'numerator', 'denominator'])
+StatusResUnique = namedtuple(
+    'StatusResUnique', ['handle', 'known', 'running', 'numerator', 'denominator', 'waiting'])
