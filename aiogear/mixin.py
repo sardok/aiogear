@@ -7,6 +7,7 @@ from aiogear.utils import to_bool
 from aiogear.response import Noop, NoJob, JobCreated
 from aiogear.response import WorkComplete, WorkFail, WorkException
 from aiogear.response import JobAssign, JobAssignUniq, JobAssignAll
+from aiogear.response import StatusRes, StatusResUnique
 
 logger = logging.getLogger(__file__)
 
@@ -114,8 +115,16 @@ class GearmanProtocolMixin:
 
     def _status_res_handler(self, data):
         args = self._split(data)
-        casters = [lambda x: x.decode('utf8'), to_bool, to_bool, int, int, int]
-        return self._cast_args(args, casters)
+        cast_to = [lambda x: x.decode('utf8'), to_bool, to_bool, int, int, int]
+        len_to_cls = {
+            5: StatusRes,
+            6: StatusResUnique
+        }
+        try:
+            cls = len_to_cls[len(args)]
+            return cls(*self._cast_args(args, cast_to))
+        except IndexError:
+            raise RuntimeError('Unable to parse status response %r' % data)
 
     def _error_handler(self, data):
         args = self._split(data)
