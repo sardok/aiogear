@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='aiogear',
-    version='0.1.2',
+    version='0.1.3',
     author='Sinan Nalkaya',
     author_email='sardok@gmail.com',
     url='https://github.com/sardok/aiogear',
