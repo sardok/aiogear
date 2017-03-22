@@ -22,6 +22,13 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
         self.submit_job_low_bg = partial(self._submit_job, Type.SUBMIT_JOB_LOW_BG)
 
         self.handles = {}
+        self._closing = None
+
+    def __del__(self):
+        try:
+            self.disconnect()
+        except AttributeError:
+            pass
 
     @staticmethod
     def uuid():
@@ -35,6 +42,8 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
 
     def connection_lost(self, exc):
         self.transport = None
+        if self._closing:
+            self._closing.set_result(exc)
 
     async def _submit_job(self, packet, name, *args, **kwargs):
         uuid = kwargs.pop('uuid', None)
@@ -75,3 +84,7 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
 
     def disconnect(self):
         self.transport.close()
+        f = self._closing = self.loop.create_future()
+        return f
+
+    close = disconnect
