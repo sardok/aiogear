@@ -16,10 +16,11 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
     def __init__(self, *functions, loop=None, grab_type=Type.GRAB_JOB):
         super(Worker, self).__init__(loop=loop)
         self.transport = None
-        self.task = None
+        self.main_task = None
         self.functions = OrderedDict()
         self.running = WeakValueDictionary()
         self.waiters = []
+        self.shutting_down = False
 
         grab_mapping = {
             Type.GRAB_JOB: self.grab_job,
@@ -48,17 +49,17 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         for fname in self.functions.keys():
             logger.debug('Registering function %s', fname)
             self.can_do(fname)
-        self.task = self.get_task()
+        self.main_task = self.get_task(self.run())
 
     def connection_lost(self, exc):
         self.transport = None
 
-    def get_task(self):
-        return asyncio.Task(self.run())
+    def get_task(self, coro):
+        return asyncio.ensure_future(coro, loop=self.loop)
 
     async def run(self,):
         no_job = NoJob()
-        while True:
+        while not self.shutting_down:
             self.pre_sleep()
             await self.wait_for(Type.NOOP)
             response = await self.grab()
@@ -78,7 +79,7 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
                 try:
                     result_or_coro = func(job_info)
                     if asyncio.iscoroutine(result_or_coro):
-                        task = asyncio.ensure_future(result_or_coro, loop=self.loop)
+                        task = self.get_task(result_or_coro)
                         self.running[job_info.handle] = task
                         result = await task
                     else:
@@ -87,24 +88,31 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
                 except Exception as ex:
                     logger.exception('Job (handle %s) resulted with exception', job_info.handle)
                     self.work_exception(job_info.handle, str(ex))
+                finally:
+                    self.running.pop(job_info.handle, None)
 
             except AttributeError:
                 logger.error('Unexpected GRAB_JOB response %r', response)
 
-    async def shutdown(self):
-        logger.debug('Shutting down worker ...')
-        async def cancel_and_wait(tasks):
-            if not tasks:
-                return
-            for task in tasks:
-                task.cancel()
-            try:
-                await asyncio.wait(tasks, loop=self.loop)
-            except asyncio.CancelledError:
-                pass
+    async def shutdown(self, graceful=False):
+        logger.debug('Shutting down worker {}gracefully...'.format('' if graceful else 'un'))
+        self.shutting_down = True
+        sub_tasks = list(self.running.values())
+        if graceful:
+            if sub_tasks:
+                await asyncio.wait(sub_tasks, loop=self.loop)
+        else:
+            async def cancel_and_wait(tasks):
+                for task in tasks:
+                    task.cancel()
+                try:
+                    await asyncio.wait(tasks, loop=self.loop)
+                except asyncio.CancelledError:
+                    pass
+            if sub_tasks:
+                await cancel_and_wait(sub_tasks)
+        self.main_task.cancel()
 
-        await cancel_and_wait(list(self.running.values()))
-        await cancel_and_wait([self.task])
         if self.transport:
             self.transport.close()
 
