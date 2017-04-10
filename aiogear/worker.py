@@ -157,3 +157,6 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         if result is None:
             result = ''
         self.send(Type.WORK_COMPLETE, handle, result)
+
+    def set_client_id(self, client_id):
+        self.send(Type.SET_CLIENT_ID, client_id)

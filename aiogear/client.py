@@ -79,9 +79,6 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
             raise RuntimeError('Unable to find handle {} in handles {}'.format(handle, self.handles))
         return f
 
-    def set_client_id(self, client_id):
-        self.send(Type.SET_CLIENT_ID, client_id)
-
     def disconnect(self):
         self.transport.close()
         f = self._closing = self.loop.create_future()
