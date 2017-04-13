@@ -54,6 +54,8 @@ class GearmanProtocolMixin:
         fmt_sz = struct.calcsize(fmt)
         magic, packet_num, sz = struct.unpack(fmt, data[:fmt_sz])
         begin, end = fmt_sz, fmt_sz + sz
+        if len(data) < end:
+            raise RuntimeError
         return Type(packet_num), data[begin:end], end
 
     def _pack(self, magic, packet, payload=b''):
@@ -136,7 +138,7 @@ class GearmanProtocolMixin:
         while self._data:
             try:
                 packet, payload, offset = self._unpack(self._data)
-            except struct.error:
+            except (struct.error, RuntimeError):
                 # not enough data in the buffer
                 break
             handler = self._deserializers.get(packet, lambda x: x)
