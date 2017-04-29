@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections import namedtuple, OrderedDict
 from weakref import WeakValueDictionary
+from functools import partial
 from aiogear.packet import Type
 from aiogear.mixin import GearmanProtocolMixin
 from aiogear.response import NoJob
@@ -13,7 +14,7 @@ JobInfo = namedtuple('JobInfo', ['handle', 'function', 'uuid', 'reducer', 'workl
 
 
 class Worker(GearmanProtocolMixin, asyncio.Protocol):
-    def __init__(self, *functions, loop=None, grab_type=Type.GRAB_JOB):
+    def __init__(self, *functions, loop=None, grab_type=Type.GRAB_JOB, timeout=None):
         super(Worker, self).__init__(loop=loop)
         self.transport = None
         self.main_task = None
@@ -21,6 +22,7 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         self.running = WeakValueDictionary()
         self.waiters = []
         self.shutting_down = False
+        self.timeout = timeout
 
         grab_mapping = {
             Type.GRAB_JOB: self.grab_job,
@@ -46,9 +48,14 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
         logger.info('Connection is made to %r', transport.get_extra_info('peername'))
         self.transport = transport
 
+        if self.timeout is not None:
+            can_do = partial(self.can_do_timeout, timeout=self.timeout)
+        else:
+            can_do = self.can_do
+
         for fname in self.functions.keys():
             logger.debug('Registering function %s', fname)
-            self.can_do(fname)
+            can_do(fname)
         self.main_task = self.get_task(self.run())
 
     def connection_lost(self, exc):
@@ -146,6 +153,9 @@ class Worker(GearmanProtocolMixin, asyncio.Protocol):
 
     def can_do(self, function):
         self.send(Type.CAN_DO, function)
+
+    def can_do_timeout(self, function, timeout):
+        self.send(Type.CAN_DO_TIMEOUT, function, timeout)
 
     def work_fail(self, handle):
         self.send(Type.WORK_FAIL, handle)
