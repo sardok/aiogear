@@ -49,12 +49,13 @@ class Client(GearmanProtocolMixin, asyncio.Protocol):
         uuid = kwargs.pop('uuid', None)
         if uuid is None:
             uuid = self.uuid()
+        jc_f = self.wait_for(Type.JOB_CREATED)
+        w_f = self.wait_for(Type.WORK_COMPLETE, Type.WORK_FAIL, Type.WORK_EXCEPTION)
         self.send(packet, name, uuid, *args)
-        job_created = await self.wait_for(Type.JOB_CREATED)
-        f = self.wait_for(Type.WORK_COMPLETE, Type.WORK_FAIL, Type.WORK_EXCEPTION)
+        job_created = await jc_f
         handle = job_created.handle
-        self.handles[handle] = f
-        f.add_done_callback(lambda _: self.handles.pop(handle))
+        self.handles[handle] = w_f
+        w_f.add_done_callback(lambda _: self.handles.pop(handle))
         return job_created
 
     def submit_job_sched(self, name, dt, *args, **kwargs):
