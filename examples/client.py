@@ -1,5 +1,7 @@
-import sys
+# -*- coding: utf-8 -*-
 import os.path
+import sys
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from functools import partial
@@ -11,7 +13,7 @@ from aiogear import Worker, Client
 def parse_args():
     args = sys.argv[1:]
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--addr', default='127.0.0.1', help='Gearman host address.')
+    parser.add_argument('-a', '--addr', default='172.17.10.23', help='Gearman host address.')
     parser.add_argument('-p', '--port', default=4730, type=int, help='Gearman port number.')
     return parser.parse_args(args)
 
@@ -29,6 +31,7 @@ async def register_worker(loop, addr, port):
     _, worker = await loop.create_connection(factory, addr, port)
     return worker
 
+
 async def connect(loop, addr, port):
     client = Client()
     await loop.create_connection(lambda: client, addr, port)
@@ -40,23 +43,21 @@ def job_is_complete(job_created, f):
 
 
 async def main(loop, addr, port):
-
     # Connects worker & register function
     worker = await register_worker(loop, addr, port)
 
     # Connect as client
-    client = await connect(loop, addr, port)
+    async with await connect(loop, addr, port) as client:
+        # Run sleep task and wait it
+        job_created = await client.submit_job('sleep', '5')
+        f = client.wait_job(job_created.handle)
+        f.add_done_callback(partial(job_is_complete, job_created))
+        await f
 
-    # Run sleep task and wait it
-    job_created = await client.submit_job('sleep', '5')
-    f = client.wait_job(job_created.handle)
-    f.add_done_callback(partial(job_is_complete, job_created))
-    await f
-
-    await worker.shutdown()
-    client.disconnect()
+        await worker.shutdown()
 
     loop.stop()
+
 
 if __name__ == '__main__':
     args = parse_args()
