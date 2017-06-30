@@ -4,7 +4,7 @@ import logging
 from functools import partial
 from aiogear.packet import Type
 from aiogear.utils import to_bool
-from aiogear.response import Noop, NoJob, JobCreated
+from aiogear.response import Noop, NoJob, JobCreated, WorkData
 from aiogear.response import WorkComplete, WorkFail, WorkException
 from aiogear.response import JobAssign, JobAssignUniq, JobAssignAll
 from aiogear.response import StatusRes, StatusResUnique
@@ -25,18 +25,15 @@ class GearmanProtocolMixin:
             Type.CAN_DO_TIMEOUT: lambda *xs: self._join(*[str(x) for x in xs])
         }
         self._deserializers = {
-            Type.JOB_ASSIGN: lambda x: JobAssign(
-                *[a.decode('utf8') for a in self._split(x, maxsplit=2)]),
-            Type.JOB_ASSIGN_UNIQ: lambda x: JobAssignUniq(
-                *[a.decode('utf8') for a in self._split(x, maxsplit=3)]),
-            Type.JOB_ASSIGN_ALL: lambda x: JobAssignAll(
-                *[a.decode('utf8') for a in self._split(x, maxsplit=4)]),
+            Type.JOB_ASSIGN: lambda x: JobAssign(*[a.decode('utf8') for a in self._split(x, maxsplit=2)]),
+            Type.JOB_ASSIGN_UNIQ: lambda x: JobAssignUniq(*[a.decode('utf8') for a in self._split(x, maxsplit=3)]),
+            Type.JOB_ASSIGN_ALL: lambda x: JobAssignAll(*[a.decode('utf8') for a in self._split(x, maxsplit=4)]),
             Type.STATUS_RES: self._status_res_handler,
             Type.STATUS_RES_UNIQUE: self._status_res_handler,
             Type.WORK_COMPLETE: lambda x: WorkComplete(*[a.decode('utf8') for a in self._split(x)]),
+            Type.WORK_DATA: lambda x: WorkData(*[a.decode('utf8') for a in self._split(x)]),
             Type.WORK_FAIL: lambda x: WorkFail(self._split(x)[0].decode('utf8')),
-            Type.WORK_EXCEPTION: lambda x: WorkException(
-                *[a.decode('utf8') for a in self._split(x)]),
+            Type.WORK_EXCEPTION: lambda x: WorkException(*[a.decode('utf8') for a in self._split(x)]),
             Type.ERROR: self._error_handler,
             Type.NO_JOB: lambda _: NoJob(),
             Type.NOOP: lambda _: Noop(),
