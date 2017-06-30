@@ -13,7 +13,7 @@ from aiogear import Worker, Client
 def parse_args():
     args = sys.argv[1:]
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--addr', default='172.17.10.23', help='Gearman host address.')
+    parser.add_argument('-a', '--addr', default='127.0.0.1', help='Gearman host address.')
     parser.add_argument('-p', '--port', default=4730, type=int, help='Gearman port number.')
     return parser.parse_args(args)
 
