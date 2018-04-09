@@ -62,7 +62,8 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
 
         self.do_register(self.jobs_accepted, PACKET_TYPES.JOB_CREATED)
         self.do_register(self.jobs_completed, PACKET_TYPES.WORK_COMPLETE, PACKET_TYPES.WORK_FAIL, PACKET_TYPES.WORK_EXCEPTION)
-        self.do_register(self.job_data, PACKET_TYPES.WORK_DATA, PACKET_TYPES.WORK_WARNING)
+        self.do_register(self.job_data, PACKET_TYPES.WORK_DATA)
+        self.do_register(self.job_warning, PACKET_TYPES.WORK_WARNING)
         self.do_register(self.job_status, PACKET_TYPES.WORK_STATUS)
 
         job_iter = iter(jobs)
@@ -149,16 +150,13 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
         return ({'state': state, 'data': data} for state, data in self.completed_results)
 
     def job_data(self, packet):
-        handle, output = self._split(packet[1])
+        noti_type, data = packet
+        handle, output = data
+        self.notify('data', handle, output)
 
-        if packet[0] == PACKET_TYPES.WORK_WARNING:
-            msg = 'warning'
-        elif packet[0] == PACKET_TYPES.WORK_DATA:
-            msg = 'data'
-        else:
-            msg = 'unknown'
-
-        self.notify(msg, handle.decode('ascii'), output.decode('ascii'))
+    def job_warning(self, packet):
+        handle, output = map(lambda i: i.decode('ascii'), self._split(packet[1]))
+        self.notify('warning', handle, output)
 
     def job_status(self, packet):
         parts = self._split(packet[1])
