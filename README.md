@@ -27,7 +27,7 @@ When necessary, register on runtime (with optional custom name) is possible too.
 worker.register_function(_sleep, 'sleep')
 ```
 
-Each function assigned to a particular job, takes `JobInfo` a custom data structure as only parameter regardless of the job type. E.g.:
+Each function assigned to a particular job which takes `JobInfo`, a custom data structure as only parameter regardless of the job type. E.g.:
 
 ```python
 JobInfo(handle='H:ev-ubuntu:38', function='sleep', uuid=None, reducer=None, workload='5')
