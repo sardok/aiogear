@@ -4,6 +4,10 @@ Asynchronous gearman library based on asyncio implemented in pure python.
 
 ## Asynchonous Worker
 
+### Function Registration as Worker
+
+#### Static Registration
+
 Once the worker gets connected to the gearman daemon, it registers all the given functions.
 
 ```python
@@ -20,20 +24,23 @@ async def connect_worker(loop, addr, port):
     _, worker = await loop.create_connection(factory, addr, port)
     return worker
 ```
+#### Dynamic Registration
 
-When necessary, register on runtime (with optional custom name) is possible too.
+When necessary, registration on runtime (with optional custom name) is possible too.
 
 ```python
 worker.register_function(_sleep, 'sleep')
 ```
 
-Each function assigned to a particular job which takes `JobInfo`, a custom data structure as only parameter regardless of the job type. E.g.:
+### Registered Function Calls
+
+Each function assigned to a particular job must accept a sole argument `JobInfo`, which is a custom data structure which represents the job. E.g.:
 
 ```python
 JobInfo(handle='H:ev-ubuntu:38', function='sleep', uuid=None, reducer=None, workload='5')
 ```
 
-However, partial functions could be used for extra argument(s).
+If needed, partial functions could be used for extra argument(s).
 
 ```python
 async def sleep(loop, job_info):
@@ -51,7 +58,7 @@ For running more than one worker in parallel see `examples/` directory.
 
 ## Asynchonous Client
 
-As simple as regular tcp client.
+Creating client is as simple as creating tcp client.
 
 ```python
 async def connect(loop, addr, port):
@@ -60,14 +67,14 @@ async def connect(loop, addr, port):
     return client
 ```
 
-Submitted job returns `JobCreated` a custom data structure with a `handle` property.
+Submitted job returns custom data structure `JobCreated` which has a `handle` property.
 
 ```python
 job_created = await client.submit_job('sleep', '5')
 print(job_created) # JobCreated(handle='H:ev-ubuntu:38')
 ```
 
-`asyncio.Future` returning `wait_for` method could be for the sake of the task.
+`asyncio.Future` returning `wait_for` method could be used for the sake of the task.
 
 ```python
 def job_is_complete(job_created, f):
