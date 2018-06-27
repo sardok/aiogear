@@ -49,7 +49,9 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
         """
         Submits a group of jobs using the same worker to Gearman.
         :param worker_name: The Gearman function name
-        :param jobs: A list tuples of uuid, and data
+        :param jobs: A list tuples of uuid, data, priority
+               Priority is optional and should be one of
+               packet.Type.SUBMIT_JOB, packet.Type.SUBMIT_JOB_HIGH, packet.Type.SUBMIT_JOB_LOW
         :return: A future resolved when jobs are accepted, a future resolved when jobs are completed
         """
 
@@ -72,7 +74,15 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
             'total': len(jobs)
         })
 
-        async def submit_each(uuid, data):
+        async def submit_each(*args):
+
+            uuid, data, *priority = args
+
+            if not priority:
+                priority = PACKET_TYPES.SUBMIT_JOB
+            else:
+                priority = priority[0]
+
             """
             Submit each job and wait for the handle to
             come back in job_accepted()
@@ -82,8 +92,15 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
             Completed future contains a generator of job results
             """
 
+            if priority == PACKET_TYPES.SUBMIT_JOB_HIGH:
+                submit_funct = self.submit_job_high
+            elif priority == PACKET_TYPES.SUBMIT_JOB_LOW:
+                submit_funct = self.submit_job_low
+            else:
+                submit_funct = self.submit_job
+
             self.ready_send_next = self.loop.create_future()
-            await self.submit_job(worker_name, data, uuid=uuid)
+            await submit_funct(worker_name, data, uuid=uuid)
             handle = await self.ready_send_next
             self.handles_to_job[handle] = uuid
 
