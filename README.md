@@ -8,7 +8,7 @@ Asynchronous gearman library based on asyncio implemented in pure python.
 
 #### Static Registration
 
-Once the worker gets connected to the gearman daemon, it registers all the given functions.
+Once the worker gets connected to the gearman daemon, it registers all the given functions. In the example below, the only registered function is `sleep`.
 
 ```python
 async def sleep(job_info):
@@ -34,13 +34,13 @@ worker.register_function(_sleep, 'sleep')
 
 ### Registered Function Calls
 
-Each function assigned to a particular job must accept a sole argument `JobInfo`, which is a custom data structure which represents the job. E.g.:
+Each function assigned to a particular job must accept a sole argument `JobInfo`. It is a custom data structure which represents the job. E.g.:
 
 ```python
 JobInfo(handle='H:ev-ubuntu:38', function='sleep', uuid=None, reducer=None, workload='5')
 ```
 
-If needed, partial functions could be used for extra argument(s).
+If needed, partial functions could be used for extra argument(s). The function, passed to `Worker` could be `(function, function_name)` pair.
 
 ```python
 async def sleep(loop, job_info):
@@ -67,14 +67,14 @@ async def connect(loop, addr, port):
     return client
 ```
 
-Submitted job returns custom data structure `JobCreated` which has a `handle` property.
+Submitted job returns custom data structure `JobCreated` with a `handle` property which could be used to trace the job.
 
 ```python
 job_created = await client.submit_job('sleep', '5')
 print(job_created) # JobCreated(handle='H:ev-ubuntu:38')
 ```
 
-`asyncio.Future` returning `wait_for` method could be used for the sake of the task.
+`asyncio.Future` returning `wait_job` method could be used to asynchronously block the current context until job is finished.
 
 ```python
 def job_is_complete(job_created, f):
