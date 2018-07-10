@@ -18,6 +18,12 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
     - set_update_callback: set a function to be called as updates come from Gearman
     - submit_jobs: send jobs to the Gearman server
     """
+    
+    priority_map = {
+        PACKET_TYPES.SUBMIT_JOB_HIGH: self.submit_job_high
+        PACKET_TYPES.SUBMIT_JOB_LOW: self.submit_job_low
+        PACKET_TYPES.SUBMIT_JOB: self.submit_job
+    }
 
     def __init__(self, loop=None):
         super().__init__(loop=loop)
@@ -74,30 +80,22 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
             'total': len(jobs)
         })
 
-        async def submit_each(*args):
-
-            uuid, data, *priority = args
-
-            if not priority:
-                priority = PACKET_TYPES.SUBMIT_JOB
-            else:
-                priority = priority[0]
-
+        async def submit_each(uuid, data, priority=PACKET_TYPES.SUBMIT_JOB):
             """
             Submit each job and wait for the handle to
             come back in job_accepted()
             :param uuid: Globally unique identifier for the job
             :param data: Data to pass to generic_worker
+            :param priority: What order should the job be taken out of
+             the gearman queue
             :return: Future resolved when all jobs accepted, completed
             Completed future contains a generator of job results
             """
 
-            if priority == PACKET_TYPES.SUBMIT_JOB_HIGH:
-                submit_funct = self.submit_job_high
-            elif priority == PACKET_TYPES.SUBMIT_JOB_LOW:
-                submit_funct = self.submit_job_low
-            else:
-                submit_funct = self.submit_job
+            try:
+                submit_funct = self.priority_map[priority]
+            except KeyError:
+                raise Exception("Unsupported priority {}".format(priority))
 
             self.ready_send_next = self.loop.create_future()
             await submit_funct(worker_name, data, uuid=uuid)
