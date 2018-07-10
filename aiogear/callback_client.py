@@ -19,12 +19,6 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
     - submit_jobs: send jobs to the Gearman server
     """
     
-    priority_map = {
-        PACKET_TYPES.SUBMIT_JOB_HIGH: self.submit_job_high
-        PACKET_TYPES.SUBMIT_JOB_LOW: self.submit_job_low
-        PACKET_TYPES.SUBMIT_JOB: self.submit_job
-    }
-
     def __init__(self, loop=None):
         super().__init__(loop=loop)
         self.transport = None
@@ -34,6 +28,11 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
         self.update_callback = lambda *args: None
         self.pending_handles = collections.defaultdict(list)
         self.handles_to_job = {}
+        self.priority_map = {
+            PACKET_TYPES.SUBMIT_JOB_HIGH: self.submit_job_high,
+            PACKET_TYPES.SUBMIT_JOB_LOW: self.submit_job_low,
+            PACKET_TYPES.SUBMIT_JOB: self.submit_job
+        }
 
     def set_update_callback(self, async_callback):
         """
