@@ -73,7 +73,6 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
         self.do_register(self.job_warning, PACKET_TYPES.WORK_WARNING)
         self.do_register(self.job_status, PACKET_TYPES.WORK_STATUS)
 
-        job_iter = iter(jobs)
         self.notify('progress', None, {
             'complete': 0,
             'total': len(jobs)
@@ -106,7 +105,7 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
                     self.notify(*args)
                     self.pending_handles[handle] = None
 
-        for params in job_iter:
+        for params in jobs:
             await submit_each(*params)
 
         return self.accepted_future, self.complete_future
