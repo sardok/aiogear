@@ -18,7 +18,7 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
     - set_update_callback: set a function to be called as updates come from Gearman
     - submit_jobs: send jobs to the Gearman server
     """
-
+    
     def __init__(self, loop=None):
         super().__init__(loop=loop)
         self.transport = None
@@ -28,6 +28,11 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
         self.update_callback = lambda *args: None
         self.pending_handles = collections.defaultdict(list)
         self.handles_to_job = {}
+        self.priority_map = {
+            PACKET_TYPES.SUBMIT_JOB_HIGH: self.submit_job_high,
+            PACKET_TYPES.SUBMIT_JOB_LOW: self.submit_job_low,
+            PACKET_TYPES.SUBMIT_JOB: self.submit_job
+        }
 
     def set_update_callback(self, async_callback):
         """
@@ -49,7 +54,9 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
         """
         Submits a group of jobs using the same worker to Gearman.
         :param worker_name: The Gearman function name
-        :param jobs: A list tuples of uuid, and data
+        :param jobs: A list tuples of uuid, data, priority
+               Priority is optional and should be one of
+               packet.Type.SUBMIT_JOB, packet.Type.SUBMIT_JOB_HIGH, packet.Type.SUBMIT_JOB_LOW
         :return: A future resolved when jobs are accepted, a future resolved when jobs are completed
         """
 
@@ -72,18 +79,25 @@ class CallbackClient(mixin.GearmanProtocolMixin, asyncio.Protocol):
             'total': len(jobs)
         })
 
-        async def submit_each(uuid, data):
+        async def submit_each(uuid, data, priority=PACKET_TYPES.SUBMIT_JOB):
             """
             Submit each job and wait for the handle to
             come back in job_accepted()
             :param uuid: Globally unique identifier for the job
             :param data: Data to pass to generic_worker
+            :param priority: What order should the job be taken out of
+             the gearman queue
             :return: Future resolved when all jobs accepted, completed
             Completed future contains a generator of job results
             """
 
+            try:
+                submit_funct = self.priority_map[priority]
+            except KeyError:
+                raise Exception("Unsupported priority {}".format(priority))
+
             self.ready_send_next = self.loop.create_future()
-            await self.submit_job(worker_name, data, uuid=uuid)
+            await submit_funct(worker_name, data, uuid=uuid)
             handle = await self.ready_send_next
             self.handles_to_job[handle] = uuid
 
